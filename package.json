@@ -1,0 +1,42 @@
+{
+  "name": "droidpilot-cli",
+  "version": "1.0.0",
+  "description": "Android 设备自动化控制命令行工具 - AI 驱动",
+  "main": "dist/index.js",
+  "bin": {
+    "droidpilot": "./cli.js"
+  },
+  "scripts": {
+    "build": "vite build",
+    "start": "node cli.js",
+    "dev": "npm run build && npm run start"
+  },
+  "keywords": [
+    "android",
+    "adb",
+    "automation",
+    "ai",
+    "cli",
+    "langchain"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "@langchain/core": "^1.1.28",
+    "@langchain/openai": "^1.2.10",
+    "langchain": "^1.2.27",
+    "zod": "^3.25.67"
+  },
+  "devDependencies": {
+    "@rollup/plugin-commonjs": "^29.0.0",
+    "@rollup/plugin-json": "^6.1.0",
+    "@rollup/plugin-node-resolve": "^16.0.3",
+    "@types/node": "^24.0.14",
+    "ts-node": "^10.9.2",
+    "typescript": "~5.8.3",
+    "vite": "^7.3.1"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}
