@@ -318,7 +318,7 @@ async function main() {
           const screenshotPath = `screenshot_${Date.now()}.png`;
           const buffer = Buffer.from(capture.base64, 'base64');
           fs.writeFileSync(screenshotPath, buffer);
-          console.log(`截图已保存: ${screenshotPath} (${capture.width}x${capture.height})`);
+          console.log(`截图已保存: ${screenshotPath} (${capture.compressedWidth}x${capture.compressedHeight}, 原始 ${capture.width}x${capture.height})`);
           continue;
         }
 

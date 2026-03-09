@@ -1,12 +1,23 @@
 // ADB Manager - High-level ADB Device Controller
 // This is the main entry point for CLI application
 
+import sharp from 'sharp';
 import { AdbProtocol } from './protocol';
 import type {
   ConnectionState,
   DeviceInfo,
   ScreenCapture,
 } from './types';
+
+/** 截图压缩配置 */
+const SCREENSHOT_CONFIG = {
+  /** 是否启用压缩（false 则返回原图） */
+  enableCompression: false,
+  /** 目标宽度（保持比例，仅压缩时生效） */
+  targetWidth: 720,
+  /** PNG 压缩级别 (0-9, 9为最高压缩) */
+  compressionLevel: 9,
+};
 
 export { AdbProtocol } from './protocol';
 export { AdbTransport } from './transport';
@@ -59,27 +70,79 @@ export class AdbManager {
     return await this.protocol.shell(command);
   }
 
-  /** Capture the device screen as PNG */
-  async captureScreen(): Promise<{ base64: string; width: number; height: number }> {
+  /** Capture the device screen as PNG (compressed)
+   * @returns base64 - 压缩后的图片
+   *          width/height - 原始分辨率（用于坐标转换）
+   *          compressedWidth/compressedHeight - 压缩后尺寸（用于显示）
+   */
+  async captureScreen(): Promise<{
+    base64: string;
+    width: number;
+    height: number;
+    compressedWidth: number;
+    compressedHeight: number;
+  }> {
     // Use exec: instead of shell: to avoid PTY line ending conversion
     // which would corrupt binary PNG data
     const pngData = await this.protocol.execBinary('screencap -p');
 
-    // Convert Buffer to base64
-    const base64 = pngData.toString('base64');
-
-    // Parse PNG header for dimensions (width at offset 16, height at offset 20)
+    // Get original dimensions from PNG header
     let width = 0;
     let height = 0;
     if (pngData.length > 24) {
-      width = pngData.readUInt32BE(16); // PNG uses big-endian
+      width = pngData.readUInt32BE(16);
       height = pngData.readUInt32BE(20);
     }
 
+    // Compress: resize to reduce resolution + PNG compression
+    let resized: Buffer;
+    if (SCREENSHOT_CONFIG.enableCompression) {
+      resized = await sharp(pngData)
+        .resize(SCREENSHOT_CONFIG.targetWidth, null, {
+          // null height = auto maintain aspect ratio
+          withoutEnlargement: true,
+        })
+        .png({
+          compressionLevel: SCREENSHOT_CONFIG.compressionLevel,
+          adaptiveFiltering: true,
+          palette: false, // Keep full color for UI element recognition
+        })
+        .toBuffer();
+    } else {
+      // No compression, use original
+      resized = pngData;
+    }
+
+    const base64 = resized.toString('base64');
+
+    // Get compressed dimensions
+    let compressedWidth: number;
+    let compressedHeight: number;
+    if (SCREENSHOT_CONFIG.enableCompression) {
+      const metadata = await sharp(resized).metadata();
+      compressedWidth = metadata.width ?? width;
+      compressedHeight = metadata.height ?? height;
+    } else {
+      compressedWidth = width;
+      compressedHeight = height;
+    }
+
+    // Log compression info
+    const originalSizeKB = (pngData.length / 1024).toFixed(1);
+    const compressedSizeKB = (resized.length / 1024).toFixed(1);
+    if (SCREENSHOT_CONFIG.enableCompression) {
+      const ratio = ((1 - resized.length / pngData.length) * 100).toFixed(0);
+      console.log(`[Screenshot] ${width}x${height} (${originalSizeKB}KB) → ${compressedWidth}x${compressedHeight} (${compressedSizeKB}KB, -${ratio}%)`);
+    } else {
+      console.log(`[Screenshot] ${width}x${height} (${originalSizeKB}KB) - no compression`);
+    }
+
     return {
-      width,
-      height,
       base64,
+      width,              // 原始尺寸（用于坐标转换）
+      height,             // 原始尺寸（用于坐标转换）
+      compressedWidth,    // 压缩后尺寸（用于显示）
+      compressedHeight,   // 压缩后尺寸（用于显示）
     };
   }
 
