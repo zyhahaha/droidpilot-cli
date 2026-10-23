@@ -1,12 +1,10 @@
 // ADB Manager - High-level ADB Device Controller
 // This is the main entry point for CLI application
 
-import sharp from 'sharp';
 import { AdbProtocol } from './protocol';
 import type {
   ConnectionState,
   DeviceInfo,
-  ScreenCapture,
 } from './types';
 
 /** 截图压缩配置 */
@@ -95,10 +93,17 @@ export class AdbManager {
     }
 
     // Compress: resize to reduce resolution + PNG compression
+    // sharp 是 native 模块，这里按需懒加载：未启用压缩时完全不加载，启动更快
     let resized: Buffer;
-    if (SCREENSHOT_CONFIG.enableCompression) {
+    let compressedWidth: number;
+    let compressedHeight: number;
+
+    if (SCREENSHOT_CONFIG.enableCompression && width > 0 && height > 0) {
+      const { default: sharp } = await import('sharp');
+      const targetWidth = Math.min(SCREENSHOT_CONFIG.targetWidth, width);
+
       resized = await sharp(pngData)
-        .resize(SCREENSHOT_CONFIG.targetWidth, null, {
+        .resize(targetWidth, null, {
           // null height = auto maintain aspect ratio
           withoutEnlargement: true,
         })
@@ -108,24 +113,18 @@ export class AdbManager {
           palette: false, // Keep full color for UI element recognition
         })
         .toBuffer();
+
+      // 按比例推算压缩后尺寸，省掉一次 sharp 读元数据的 native 往返
+      compressedWidth = targetWidth;
+      compressedHeight = Math.round((height * targetWidth) / width);
     } else {
       // No compression, use original
       resized = pngData;
-    }
-
-    const base64 = resized.toString('base64');
-
-    // Get compressed dimensions
-    let compressedWidth: number;
-    let compressedHeight: number;
-    if (SCREENSHOT_CONFIG.enableCompression) {
-      const metadata = await sharp(resized).metadata();
-      compressedWidth = metadata.width ?? width;
-      compressedHeight = metadata.height ?? height;
-    } else {
       compressedWidth = width;
       compressedHeight = height;
     }
+
+    const base64 = resized.toString('base64');
 
     // Log compression info
     const originalSizeKB = (pngData.length / 1024).toFixed(1);

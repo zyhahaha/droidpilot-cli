@@ -10,6 +10,9 @@ const externalDeps = [
   '@langchain/core',
   '@langchain/openai',
   'zod',
+  // sharp 是 native 模块（.node 二进制），必须保持外部依赖，
+  // 否则 rollup 会尝试解析它的 package.json / 二进制而构建失败
+  'sharp',
 ];
 
 export default defineConfig({
