@@ -402,6 +402,7 @@ export class AndroidAgent {
   private _stopped = false;
   private onStatusChange?: (status: AgentStatus) => void;
   private onStepAdd?: (step: AgentStep) => void;
+  private onStepUpdate?: (step: AgentStep, index: number) => void;
   private onScreenCapture?: (base64: string) => void;
 
   constructor(
@@ -410,6 +411,8 @@ export class AndroidAgent {
     callbacks?: {
       onStatusChange?: (status: AgentStatus) => void;
       onStepAdd?: (step: AgentStep) => void;
+      /** 步骤的 observation 在执行完成后被回填时触发 */
+      onStepUpdate?: (step: AgentStep, index: number) => void;
       onScreenCapture?: (base64: string) => void;
     }
   ) {
@@ -417,6 +420,7 @@ export class AndroidAgent {
     this.config = config;
     this.onStatusChange = callbacks?.onStatusChange;
     this.onStepAdd = callbacks?.onStepAdd;
+    this.onStepUpdate = callbacks?.onStepUpdate;
     this.onScreenCapture = callbacks?.onScreenCapture;
   }
 
@@ -546,8 +550,10 @@ export class AndroidAgent {
           const toolFn = toolMap.get(toolName);
 
           // 在步骤中包含LLM思考
+          // 注意：不要在控制台输出里使用 4 字节 emoji（如 💭）。
+          // Windows 终端会误判其显示宽度，导致整行左移、出现重复字符与吞字。
           const thoughtPrefix = thinkingContent && thinkingContent.trim()
-            ? `💭 ${thinkingContent}\n\n`
+            ? `${thinkingContent}\n\n`
             : '';
 
           this.addStep({
@@ -569,11 +575,13 @@ export class AndroidAgent {
             result = `工具错误: ${error instanceof Error ? error.message : String(error)}`;
           }
 
-          // 用观察结果更新最后一个步骤
+          // 用观察结果更新最后一个步骤，并通知外部（否则打印出来的永远是"执行中..."）
           if (this._steps.length > 0) {
-            this._steps[this._steps.length - 1].observation = result.startsWith('SCREENSHOT:') 
+            const lastIndex = this._steps.length - 1;
+            this._steps[lastIndex].observation = result.startsWith('SCREENSHOT:') 
               ? '截图成功，已发送给大模型分析' 
               : result;
+            this.onStepUpdate?.(this._steps[lastIndex], lastIndex);
           }
 
           // 处理截图结果 - 将图片作为多模态消息发送给大模型

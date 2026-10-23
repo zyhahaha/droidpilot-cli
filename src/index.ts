@@ -146,12 +146,23 @@ function showConfig(config: AgentConfig) {
   console.log(`\n配置文件: ${CONFIG_FILE}`);
 }
 
+/** 截断过长的观察输出（如 dumpsys 整屏文本），避免刷屏 */
+function truncate(text: string, max = 300): string {
+  const singleLine = text.replace(/\r?\n/g, ' ').trim();
+  return singleLine.length > max
+    ? `${singleLine.slice(0, max)}… (共 ${text.length} 字)`
+    : singleLine;
+}
+
 /** 打印步骤信息 */
 function printStep(step: AgentStep, index: number) {
   console.log(`\n[步骤 ${index + 1}] ${new Date(step.timestamp).toLocaleTimeString()}`);
   console.log(`  思考: ${step.thought}`);
   console.log(`  动作: ${step.action}`);
-  console.log(`  观察: ${step.observation}`);
+  // 观察结果要等工具执行完才回填，此处只打印已经就绪的
+  if (step.observation && step.observation !== '执行中...') {
+    console.log(`  观察: ${truncate(step.observation)}`);
+  }
 }
 
 /** 创建 readline 接口 */
@@ -264,6 +275,9 @@ async function main() {
       },
       onStepAdd: (step) => {
         printStep(step, agent.steps.length - 1);
+      },
+      onStepUpdate: (step) => {
+        console.log(`  观察: ${truncate(step.observation)}`);
       },
     });
 
